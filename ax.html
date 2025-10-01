@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Quaspace – 3D Solar System Explorer by AX</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --bg: linear-gradient(135deg,#141629 0%,#242454 100%);
+      --accent: #8ad8ff;
+      --planet-shadow: #222c;
+      --modal-bg: rgba(20,22,41,0.98);
+      --modal-accent: #4370f2;
+      --planet-radius: 52px;
+      --planet-hover: 1.25;
+      --modal-width: 300px;
+      --star-color: #fff;
+      --star-size: 2px;
+      --font-main: 'Segoe UI', 'Arial', sans-serif;
+      --footer-bg: #1a1d2b;
+    }
+    body {
+      margin:0;
+      font-family:var(--font-main);
+      background:var(--bg);
+      color:#f1f3f9;
+      line-height:1.7;
+      min-height:100vh;
+      overflow-x:hidden;
+    }
+    .starfield {
+      position:fixed; inset:0; z-index:-2;
+      pointer-events:none;
+    }
+    canvas#stars {
+      width:100vw;
+      height:100vh;
+      display:block;
+      position:absolute; top:0; left:0;
+      z-index:-2;
+      background:linear-gradient(135deg,#141629,#2c3557 80%,#141629 100%);
+    }
+    .hero {
+      padding:56px 0 32px 0;
+      text-align:center;
+      background:transparent;
+      position:relative;
+    }
+    .hero-title {
+      font-size:2.2rem;
+      color:var(--accent);
+      font-weight:800;
+      letter-spacing:2px;
+      margin-bottom:10px;
+    }
+    .hero-sub,.profile-small {
+      font-size:1.05rem;
+      color:#d0eaff;
+      margin:10px 0 20px 0;
+    }
+    .profile {
+      margin:auto;
+      max-width:340px;
+      background:rgba(32,41,71,0.86);
+      border-radius:18px; box-shadow:0 2px 32px #2b2380a0;
+      padding:32px 24px;
+      display:grid; gap:16px;
+      margin-bottom:32px;
+      border-left:5px solid var(--accent);
+    }
+    .avatar {
+      width:74px; height:74px;
+      background:radial-gradient(circle,#d0eaff 70%,#4370f2 100%);
+      border-radius:50%; margin:0 auto 10px auto;
+      box-shadow:0 2px 22px #8ad8ff33;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .avatar img { width:64px; height:64px; border-radius:50%; object-fit:cover;}
+    .profile h2 {
+      font-size:1.4rem; color:#fff; margin:0;
+    }
+    .profile-location { font-size:1rem; color:#8ad8ff; }
+    .profile-facts { margin-top:14px;}
+    .profile-facts li { margin-bottom:6px; color:#d1eaff;}
+    .solar-system-container {
+      text-align:center;
+      margin:30px auto 0 auto;
+      padding:10px 0 44px 0;
+    }
+    .solar-system {
+      display:flex; justify-content:center; gap:34px;
+      flex-wrap:wrap; position:relative; margin-bottom:28px;
+    }
+    .planet {
+      width:var(--planet-radius);
+      height:var(--planet-radius);
+      border-radius:50%;
+      box-shadow:0 8px 28px var(--planet-shadow);
+      position:relative;
+      cursor:pointer;
+      display:inline-block;
+      transition:transform 0.22s cubic-bezier(.42,2,.27,.8), box-shadow 0.3s;
+      z-index:1;
+      border:2px solid #1d2e52;
+    }
+    .planet.selected { box-shadow:0 0 40px 0 var(--accent),0 8px 28px var(--planet-shadow);}
+    .planet:hover { transform:scale(var(--planet-hover)); z-index:5; }
+    /* Unique 3D colors/textures for planets */
+    .planet.mercury  { background:radial-gradient(circle,#a09890 60%,#504b42 100%);}
+    .planet.venus    { background:radial-gradient(circle,#ffe2b8 55%,#cbbf7c 100%);}
+    .planet.earth    { background:radial-gradient(circle at 70% 15%,#7cc6f2 60%,#158be1 81%,#229778 89%,#495273 100%);}
+    .planet.mars     { background:radial-gradient(circle,#e77f61 52%,#ab2f21 100%);}
+    .planet.jupiter  { background:repeating-linear-gradient(180deg,#e8e1b3 15px,#b7924e 18px,#d9bc7c 25px); }
+    .planet.saturn   { background:linear-gradient(135deg,#ffeec2 70%,#bdab6e 100%);}
+    .planet.uranus   { background:radial-gradient(circle,#85eafd 76%,#3ad1c7 100%);}
+    .planet.neptune  { background:radial-gradient(circle,#549bd4 70%,#1438de 100%);}
+    .planet-ring {
+      position:absolute;
+      width:74px; height:40px;
+      left:-11px; top:16px;
+      border-radius:100% 60%;
+      border:.3px solid #f9cf7a;
+      transform:rotate(-10deg);
+      pointer-events:none;
+      z-index:0;
+    }
+    .planet.saturn .planet-ring { display:block; opacity:0.85; }
+    .planet:not(.saturn) .planet-ring { display:none; }
+    .planet-label {
+      font-size:0.93rem;
+      color:#eafcff;
+      text-align:center;
+      padding-top:2px;
+    }
+    .orbitinfo {
+      font-size:0.78rem;
+      color:#7ee6ff;
+      letter-spacing:1px;
+      margin-top:-7px;
+      margin-bottom:3px;
+    }
+    /* Modal for planet info */
+    .modal-bg {
+      display:none;
+      position:fixed; top:0; left:0; right:0; bottom:0;
+      background:rgba(16,18,34,0.92);
+      z-index:999;
+    }
+    .modal-container {
+      background:var(--modal-bg);
+      color:#eafbfd;
+      box-shadow:0 8px 40px #3d2d89a0;
+      border-radius:16px;
+      padding:32px 26px 26px 26px;
+      width:var(--modal-width);
+      max-width:94vw;
+      position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+      display:none;
+      z-index:1000;
+      animation:planetModalfade 0.44s;
+    }
+    @keyframes planetModalfade {
+      from { opacity:0; transform:translate(-50%,-54%) scale(0.96);}
+      to   { opacity:1; transform:translate(-50%,-50%) scale(1);}
+    }
+    .modal-container.active, .modal-bg.active { display:block; }
+    .modal-container h3 { margin:0 0 10px 0; font-size:1.3rem;}
+    .modal-container .planet-modal-label { font-size:1.07rem; font-weight:600; margin:0; color:var(--modal-accent);}
+    .modal-close { position:absolute; top:12px; right:18px; font-size:2rem; color:#77bdfc; background:none; border:none; cursor:pointer;}
+    .modal-container .planet-fact {margin-bottom:8px;}
+    .modal-container .fav-btn {
+      margin-top:12px;
+      background:var(--modal-accent);
+      color:#fff;
+      border:none; outline:none;
+      padding:8px 20px;
+      font-size:1rem; border-radius:13px;
+      cursor:pointer; box-shadow:0 2px 10px var(--modal-accent);
+      transition:background 0.16s;
+    }
+    .modal-container .fav-btn.favorited { background:#7ee6ff; color:#111; box-shadow:0 2px 14px #7ee6ff66;}
+    .footer {
+      background:var(--footer-bg);
+      color:#cce7fc;
+      padding:36px 0 22px 0;
+      text-align:center;
+    }
+    .footer .email-icon {
+      font-size:2rem;
+      color:var(--accent);
+      margin-bottom:6px;
+      text-decoration:none; display:inline-block;
+      transition:color 0.17s;
+    }
+    .footer .email-icon:hover { color:#fff;}
+    .footer small { display:block; margin-top:7px; color:#4493c7;}
+    /* Cosmic facts section */
+    .section-title { font-size:1.4rem; color:var(--accent); margin-bottom:10px;}
+    .facts-list {
+      display:flex; flex-wrap:wrap; gap:40px; justify-content:center;
+      margin-bottom:40px; margin-top:20px;
+      padding:0;
+    }
+    .facts-list .fact-block {
+      background:#1d2e52dd; border-radius:16px; color:#aeefff; padding:20px 18px;
+      box-shadow:0 2px 22px #4290f288; margin:0 0 15px 0;
+      width:210px; min-width:168px;
+      text-align:center; font-size:1rem;
+    }
+    /* Favorite planet box */
+    .favorite-section {
+      background:#164077c9; border-radius:14px;
+      padding:19px 0 9px 0; color:#fff;
+      margin:0 auto 32px auto; max-width:410px;
+      box-shadow:0 8px 22px #18a0fc44;
+      text-align:center;
+    }
+    .favorite-section .fav-planet-img {
+      display:inline-block;
+      width:var(--planet-radius); height:var(--planet-radius);
+      margin-bottom:7px; border-radius:50%;
+      box-shadow:0 5px 12px #2e2653aa;
+      border:2px solid #46c8f5;
+      vertical-align:middle;
+      background:var(--accent);
+    }
+    .favorite-section h4 { margin-bottom:8px; color:#90ebff;}
+    .favorite-section p { margin:0; color:#b8f9ff;}
+    /* Responsive styles */
+    @media(max-width:620px){
+      .solar-system { gap:14px;}
+      .planet { width:38px;height:38px;}
+      .modal-container{padding:22px 6px;width:96vw;}
+      .profile { padding:20px 10px; }
+      .facts-list .fact-block { width:112px; min-width:90px;}
+      .favorite-section { padding:11px 0 6px 0; }
+    }
+    @media(max-width:400px){
+      .solar-system { flex-direction:column; }
+      .modal-container{padding:7px;width:99vw;}
+    }
+  </style>
+</head>
+<body>
+  <div class="starfield">
+    <canvas id="stars"></canvas>
+  </div>
+  <section class="hero">
+    <div class="hero-title">Quaspace – 3D Solar System Explorer by AX</div>
+    <div class="hero-sub">Built by Arsalan Riyaz (AX) to explore our cosmic neighborhood with intelligence</div>
+    <aside class="profile">
+      <div class="avatar">
+        <!-- Add your photo here -->
+        <img src="https://ui-avatars.com/api/?name=AX&background=3a60e2&color=fff&size=128" alt="AX avatar"/>
+      </div>
+      <h2>Arsalan Riyaz (AX)</h2>
+      <div class="profile-location">Srinagar, Kashmir</div>
+      <div class="profile-small">Student Polymath & Space Science Enthusiast<br/>
+        <b>Founder, Quaspace Platform</b>
+      </div>
+      <ul class="profile-facts">
+        <li>Top 1% intellect (Olympiad, NEET, UPSC)</li>
+        <li>Fluent in 5 languages, cultural communicator</li>
+        <li>Web developer & mobile repair expert</li>
+        <li>Passionate about physics, biology, and quantum research</li>
+        <li>Aspiring for Oxford, Stanford, MIT, Cambridge, Harvard</li>
+        <li>Vision: To make space science accessible for all students</li>
+      </ul>
+    </aside>
+  </section>
+
+  <section class="solar-system-container">
+    <div class="section-title">Solar System Planets</div>
+    <div class="solar-system" id="planet-bar"></div>
+    <div id="orbit-info"></div>
+  </section>
+  <section>
+    <div class="section-title">Why Explore the Solar System?</div>
+    <div class="facts-list">
+      <div class="fact-block">One day on Venus is longer than its year</div>
+      <div class="fact-block">Jupiter has a moon with more water than all Earth's oceans</div>
+      <div class="fact-block">Saturn's rings are mostly ice and rocky debris</div>
+      <div class="fact-block">Mars has the largest volcano in the solar system</div>
+      <div class="fact-block">Neptune was discovered by math prediction</div>
+    </div>
+  </section>
+  <section>
+    <div class="favorite-section" id="fav-section">
+      <h4>Your Favorite Planet</h4>
+      <div id="fav-planet-img"></div>
+      <div id="fav-planet-name">Pick by clicking any planet above!</div>
+      <p id="fav-planet-desc"></p>
+    </div>
+  </section>
+
+  <div class="modal-bg" id="modal-bg"></div>
+  <div class="modal-container" id="planet-modal"></div>
+
+  <footer class="footer">
+    <a class="email-icon" href="mailto:khanarsalan0906@gmail.com" title="Email AX">&#9993;</a>
+    <small>© 2025 Arsalan Riyaz | Quaspace Cosmic Explorer</small>
+  </footer>
+  <!-- Botpress chatbot scripts -->
+  <script src="https://cdn.botpress.cloud/webchat/v3.3/inject.js" defer></script>
+  <script src="https://files.bpcontent.cloud/2025/09/29/19/20250929192937-99YBQBKW.js" defer></script>
+  <script>
+    // Starfield animation
+    const starsCanvas = document.getElementById('stars');
+    function resizeStars() {
+      starsCanvas.width = window.innerWidth;
+      starsCanvas.height = window.innerHeight;
+    }
+    resizeStars();
+    window.addEventListener('resize', resizeStars);
+    function drawStars() {
+      const ctx = starsCanvas.getContext('2d');
+      ctx.clearRect(0,0,starsCanvas.width,starsCanvas.height);
+      for(let i=0;i<240;i++) {
+        const x=Math.random()*starsCanvas.width, y=Math.random()*starsCanvas.height;
+        ctx.beginPath();
+        ctx.arc(x,y,Math.random()*2+0.5,0,2*Math.PI);
+        ctx.fillStyle="rgba(220,240,255,"+(0.5+Math.random()/2)+")";
+        ctx.fill();
+      }
+    }
+    setInterval(drawStars, 1700);
+
+    // Solar system planets
+    const planetData = [
+      {id:'mercury', name:'Mercury', color:'#a09890', orbit:38, label:'Mercury', facts:'Closest to Sun',desc:'Smallest planet, closes to the Sun.',size:1,
+        modal:{distance:'57.9 million km',diameter:'4,879 km',facts:['Closest planet to the Sun','No atmosphere to retain heat','Day lasts 88 Earth days','Surface temperature varies from -173°C to 427°C'],comp:'Iron core, thin mantle'}},
+      {id:'venus',name:'Venus',color:'#ffe2b8',orbit:44,label:'Venus',facts:'Hottest planet',desc:'Similar in size to Earth; hottest planet.',size:1.2,
+        modal:{distance:'108.2 million km',diameter:'12,104 km',facts:['Hottest planet in the solar system','Rotates backwards','Thick toxic CO2 atmosphere','Surface pressure 90x Earth'],comp:'Rocky surface, thick CO2 atm.'}},
+      {id:'earth',name:'Earth',color:'#7cc6f2',orbit:52,label:'Earth',facts:'Only planet with life',desc:'Our home, water and life.',size:1.26,
+        modal:{distance:'149.6 million km',diameter:'12,756 km',facts:['Only known planet with life','71% surface water','One moon','Atmosphere 21% oxygen'],comp:'Rocky with water, life'}},
+      {id:'mars',name:'Mars',color:'#e77f61',orbit:60,label:'Mars',facts:'Red planet',desc:'Iron oxide gives its red color.',size:1.05,
+        modal:{distance:'227.9 million km',diameter:'6,792 km',facts:['Known as Red Planet','Two moons','Olympus Mons','Ancient water flows'],comp:'Iron oxide (rust)'}},
+      {id:'jupiter',name:'Jupiter',color:'#d9bc7c',orbit:74,label:'Jupiter',facts:'Largest planet',desc:'Massive gas giant.',size:1.4,
+        modal:{distance:'778.5 million km',diameter:'142,984 km',facts:['Largest planet','80+ moons','Great Red Spot','Solar system\'s vacuum cleaner'],comp:'Hydrogen, helium (gas giant)'}},
+      {id:'saturn',name:'Saturn',color:'#ffeec2',orbit:86,label:'Saturn',facts:'Has rings',desc:'Famous for its rings.',size:1.3,
+        modal:{distance:'1.432 billion km',diameter:'120,536 km',facts:['Spectacular rings','146 moons (Titan)','Less dense than water','Orbits in 29.5 years'],comp:'Gas giant, ice/rock rings'}},
+      {id:'uranus',name:'Uranus',color:'#85eafd',orbit:98,label:'Uranus',facts:'Tilted axis',desc:'Rotates on its side.',size:1.15,
+        modal:{distance:'2.867 billion km',diameter:'51,118 km',facts:['Rotates on side','Faint rings','Coldest atmosphere','Orbits in 84 years'],comp:'Ice giant (water,methane,ammonia)'}},
+      {id:'neptune',name:'Neptune',color:'#549bd4',orbit:108,label:'Neptune',facts:'Farthest planet',desc:'Windiest, farthest planet.',size:1.14,
+        modal:{distance:'4.515 billion km',diameter:'49,528 km',facts:['Windiest, 2100 km/h','Farthest from sun','16 moons (Triton)','Orbits in 165 years'],comp:'Ice giant, methane'}},
+    ];
+    // Render planets
+    const planetBar = document.getElementById('planet-bar');
+    planetBar.innerHTML = planetData.map((p,i) => `
+      <div class="planet ${p.id}" style="
+        background:${p.color};transform:translateY(${(i%2==0?-12:0)}px) scale(${p.size});"
+        data-id="${p.id}" title="${p.name} - ${p.facts}">
+        ${p.id=='saturn'?'<div class="planet-ring"></div>':''}
+        <div class="planet-label">${p.label}</div>
+      </div>
+    `).join('');
+    // Animate planets (orbital motion & rotation)
+    function animatePlanets() {
+      const now = Date.now()/4000;
+      document.querySelectorAll('.planet').forEach(function(p,i){
+        const orbitRad = planetData[i].orbit+25;
+        const angle = now*1.25 + i*0.36;
+        p.style.transform = 
+          `translate(${Math.cos(angle)*orbitRad}px,${Math.sin(angle)*orbitRad-6}px) scale(${planetData[i].size})`;
+        p.style.boxShadow="0 8px 28px "+planetData[i].color+"55";
+      });
+      requestAnimationFrame(animatePlanets);
+    }
+    animatePlanets();
+
+    // Show info modal for planets
+    const modalBg=document.getElementById('modal-bg'),
+          planetModal=document.getElementById('planet-modal'),
+          favSection=document.getElementById('fav-section');
+    function showPlanetModal(idx) {
+      const p=planetData[idx];
+      let isFav = localStorage.getItem('favPlanet') === p.id;
+      planetModal.innerHTML=`
+      <button class="modal-close" aria-label="Close">&times;</button>
+      <div class="planet-modal-label">${p.name}</div>
+      <h3>${p.facts}</h3>
+      <div class="planet-fact">Distance from Sun: <b>${p.modal.distance}</b></div>
+      <div class="planet-fact">Diameter: <b>${p.modal.diameter}</b></div>
+      <div class="planet-fact">Composition: <b>${p.modal.comp}</b></div>
+      <div class="planet-fact">Interesting Facts:</div>
+      <ul>
+        ${p.modal.facts.map(f=>`<li>${f}</li>`).join('')}
+      </ul>
+      <button class="fav-btn ${isFav?"favorited":""}">${isFav?"Favorited!":"Choose as Favorite Planet"}</button>
+      `;
+      planetModal.classList.add('active');
+      modalBg.classList.add('active');
+      planetModal.querySelector('.modal-close').onclick=()=>{planetModal.classList.remove('active');modalBg.classList.remove('active');};
+      planetModal.querySelector('.fav-btn').onclick=function(){
+        localStorage.setItem('favPlanet', p.id);
+        updateFavoritePlanet();
+        this.classList.add('favorited');
+        this.innerText='Favorited!';
+      }
+    }
+    planetBar.querySelectorAll('.planet').forEach((el,idx)=>{
+      el.onclick=()=>showPlanetModal(idx);
+    });
+
+    // Favorite planet
+    function updateFavoritePlanet() {
+      let favId=localStorage.getItem('favPlanet');
+      const favP=planetData.find(x=>x.id===favId);
+      planetBar.querySelectorAll('.planet').forEach((el,i)=>{
+        el.classList.toggle('selected', planetData[i].id===favId);
+      });
+      if(favP){
+        document.getElementById('fav-planet-img').innerHTML=`<div class="fav-planet-img" style="background:${favP.color};"></div>`;
+        document.getElementById('fav-planet-name').innerHTML=`<b>${favP.name}</b>`;
+        document.getElementById('fav-planet-desc').innerText=favP.desc;
+      } else{
+        document.getElementById('fav-planet-img').innerHTML="";
+        document.getElementById('fav-planet-name').innerHTML="Pick by clicking any planet above!";
+        document.getElementById('fav-planet-desc').innerText="";
+      }
+    }
+    updateFavoritePlanet();
+
+    // Modal background closes modal
+    modalBg.onclick=()=>{
+      planetModal.classList.remove('active');
+      modalBg.classList.remove('active');
+    }
+
+    // On load, highlight the fav planet
+    window.addEventListener('storage',updateFavoritePlanet);
+    // Keyboard esc to close modal
+    window.addEventListener('keydown', function(e){if(e.key==='Escape')modalBg.onclick();});
+
+    // Make sure star canvas fits.
+    resizeStars();
+    drawStars();
+  </script>
+</body>
+</html>
